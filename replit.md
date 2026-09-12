@@ -1,6 +1,6 @@
-# [Project name]
+# TechPulse
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+An AI-powered developer intelligence workspace for GitHub analytics, technology signals, and personalized learning guidance.
 
 ## Run & Operate
 
@@ -22,15 +22,21 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/techpulse/src/App.tsx` — the product UI and route surface
+- `artifacts/api-server/src/routes/pulse.ts` — TechPulse API, GitHub/Hacker News reads, OAuth, and Gemini analysis
+- `lib/api-spec/openapi.yaml` — API contract source of truth
+- `lib/db/src/schema/techpulse.ts` — persisted repository and AI analysis tables
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- The frontend uses generated OpenAPI React Query hooks so UI data contracts stay aligned with the API.
+- Demo data is explicit and labeled; live GitHub/Hacker News reads are used when optional configuration is present.
+- Gemini is called only from the API server and returns metadata-based fallback analysis when unavailable.
+- GitHub OAuth tokens stay in server memory behind HTTP-only cookies and are never returned to the browser.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+TechPulse gives developers a single view of their repositories, activity signals, technology news, trends, AI project analysis, and next learning recommendations.
 
 ## User preferences
 

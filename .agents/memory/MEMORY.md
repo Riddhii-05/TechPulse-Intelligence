@@ -1,0 +1,1 @@
+- [Generated client DOM iterable](generated-client-dom-iterable.md) — keep `dom.iterable` enabled for Orval clients that iterate response headers.

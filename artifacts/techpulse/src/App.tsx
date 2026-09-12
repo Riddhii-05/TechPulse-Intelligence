@@ -1,62 +1,281 @@
-import { type ReactNode } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { type ReactNode, useEffect, useState } from 'react';
+import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
+import { Link, Route, Switch, useLocation, useParams, Router as WouterRouter } from 'wouter';
+import {
+  Activity, ArrowRight, ArrowUpRight, Bell, BookOpen, BrainCircuit, Check,
+  ChevronRight, CircleAlert, Code2, Command, Compass, Database, ExternalLink,
+  Eye, GitBranch, GitCommitHorizontal, Github, Globe2, Lightbulb,
+  LineChart, ListFilter, LoaderCircle, LockKeyhole, Menu, Moon, Newspaper, RefreshCw,
+  Search, Settings2, ShieldCheck, Sparkles, Star, Sun, Target, TrendingUp, X, Zap,
+} from 'lucide-react';
+import {
+  getGetPulseAnalyticsQueryKey, getGetPulseLearningQueryKey, getGetPulseProfileQueryKey,
+  getGetPulseRepositoryQueryKey, getGetPulseTrendingQueryKey, getListPulseNewsQueryKey,
+  getListPulseRepositoriesQueryKey, useAnalyzePulseRepository, useGetPulseAnalytics,
+  useGetPulseLearning, useGetPulseProfile, useGetPulseRepository, useGetPulseTrending,
+  useListPulseNews, useListPulseRepositories, useSyncPulseData,
+} from '@workspace/api-client-react';
+import type {
+  PulseAnalysis, PulseAnalytics, PulseLearning, PulseNewsItem, PulseRepository,
+} from '@workspace/api-client-react';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
-import {
-  Route,
-  Switch,
-  useLocation,
-  Router as WouterRouter,
-} from 'wouter';
+import './index.css';
 
 const queryClient = new QueryClient();
 
-function Home() {
+const navGroups = [
+  { label: 'Workspace', items: [
+    { href: '/dashboard', label: 'Overview', icon: Activity },
+    { href: '/repositories', label: 'Repositories', icon: GitBranch },
+    { href: '/analytics', label: 'Analytics', icon: LineChart },
+  ]},
+  { label: 'Signal', items: [
+    { href: '/ai-analysis', label: 'AI analysis', icon: BrainCircuit },
+    { href: '/news', label: 'Tech news', icon: Newspaper },
+    { href: '/trending', label: 'Trending', icon: TrendingUp },
+  ]},
+  { label: 'Direction', items: [
+    { href: '/learning', label: 'Next learning', icon: Compass },
+  ]},
+];
+
+function Logo({ dark = false }: { dark?: boolean }) {
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-gray-50">
-      <div className="text-center">
-        <h1 className="text-2xl font-bold text-gray-900">
-          Replit Agent is building...
-        </h1>
-        <p className="mt-2 text-sm text-gray-600">
-          Your app will appear here once it's ready.
-        </p>
-      </div>
+    <div className="flex items-center gap-2.5" data-testid="brand-techpulse">
+      <span className={`grid size-8 place-items-center rounded-[10px] ${dark ? 'bg-[hsl(var(--sidebar-primary))] text-[hsl(var(--sidebar-primary-foreground))]' : 'bg-primary text-primary-foreground'}`}>
+        <Zap className="size-4 fill-current" />
+      </span>
+      <span className={`font-bold tracking-[-0.04em] ${dark ? 'text-sidebar-foreground' : 'text-foreground'}`}>TechPulse</span>
     </div>
   );
 }
 
-function Router() {
-  return (
-    // Keep a shared shell (sidebar, navbar) outside the boundary so it
-    // survives a page crash.
-    <RoutedErrorBoundary>
-      <Switch>
-        <Route path="/" component={Home} />
-        <Route component={NotFound} />
-      </Switch>
-    </RoutedErrorBoundary>
-  );
+function Button({ children, variant = 'primary', className = '', ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'quiet' | 'outline' | 'accent' }) {
+  const variants = {
+    primary: 'bg-primary text-primary-foreground shadow-[0_8px_18px_-12px_hsl(var(--primary))] hover:-translate-y-0.5 hover:shadow-[0_12px_22px_-13px_hsl(var(--primary))]',
+    quiet: 'bg-secondary/70 text-secondary-foreground hover:bg-secondary',
+    outline: 'border border-border bg-card text-foreground hover:border-primary/50 hover:bg-primary/5',
+    accent: 'bg-accent text-accent-foreground hover:-translate-y-0.5 shadow-[0_8px_18px_-12px_hsl(var(--accent))]',
+  };
+  return <button {...props} className={`inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2.5 text-sm font-semibold transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-55 ${variants[variant]} ${className}`} />;
 }
 
-function RoutedErrorBoundary({ children }: { children: ReactNode }) {
+function Card({ children, className = '', ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  return <div {...props} className={`rounded-xl border border-card-border bg-card shadow-[var(--shadow-card)] ${className}`}>{children}</div>;
+}
+
+function Skeleton({ className = '' }: { className?: string }) {
+  return <div className={`skeleton rounded-lg ${className}`} aria-label="Loading" data-testid="loading-skeleton" />;
+}
+
+function QueryError({ onRetry, compact = false }: { onRetry?: () => void; compact?: boolean }) {
+  return <div className={`flex ${compact ? 'min-h-28' : 'min-h-48'} flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-destructive/35 bg-destructive/5 p-6 text-center`} data-testid="status-error">
+    <CircleAlert className="size-5 text-destructive" />
+    <div><p className="text-sm font-semibold">Signal interrupted</p><p className="mt-1 text-xs text-muted-foreground">The pulse could not reach the data source.</p></div>
+    {onRetry && <Button variant="outline" onClick={onRetry} data-testid="button-retry"><RefreshCw className="size-3.5" /> Try again</Button>}
+  </div>;
+}
+
+function EmptyState({ icon: Icon = Database, title, body }: { icon?: typeof Database; title: string; body: string }) {
+  return <div className="flex min-h-48 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border bg-muted/20 px-6 text-center" data-testid="status-empty">
+    <span className="grid size-10 place-items-center rounded-xl bg-secondary text-muted-foreground"><Icon className="size-5" /></span>
+    <div><p className="text-sm font-semibold">{title}</p><p className="mt-1 max-w-sm text-xs leading-5 text-muted-foreground">{body}</p></div>
+  </div>;
+}
+
+function StatusPill({ source, connected = true }: { source?: string; connected?: boolean }) {
+  const live = connected && source !== 'demo';
+  return <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${live ? 'border-primary/25 bg-primary/8 text-primary' : 'border-accent/30 bg-accent/10 text-foreground'}`} data-testid="status-connection">
+    <span className={`size-1.5 rounded-full ${live ? 'bg-primary animate-pulse-line' : 'bg-accent'}`} /> {live ? 'GitHub connected' : 'Demo data'}
+  </span>;
+}
+
+function Avatar({ src, name, size = 'size-9' }: { src?: string; name?: string; size?: string }) {
+  return src ? <img src={src} alt={`${name ?? 'Developer'} avatar`} className={`${size} rounded-full border border-border object-cover`} data-testid="img-avatar" /> :
+    <span className={`${size} grid place-items-center rounded-full bg-primary/12 text-xs font-bold text-primary`} data-testid="avatar-fallback">{(name ?? 'D').slice(0, 2).toUpperCase()}</span>;
+}
+
+function SectionHeading({ eyebrow, title, body, action }: { eyebrow?: string; title: string; body?: string; action?: ReactNode }) {
+  return <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+    <div>{eyebrow && <p className="mb-2 font-mono text-[10px] font-medium uppercase tracking-[0.16em] text-primary">{eyebrow}</p>}<h1 className="text-2xl font-bold tracking-[-0.04em] sm:text-3xl">{title}</h1>{body && <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{body}</p>}</div>
+    {action}
+  </div>;
+}
+
+function AppShell({ children }: { children: ReactNode }) {
   const [location] = useLocation();
-  return <ErrorBoundary resetKey={location}>{children}</ErrorBoundary>;
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const profileQuery = useGetPulseProfile();
+  const profile = profileQuery.data;
+  const sync = useSyncPulseData();
+  const qc = useQueryClient();
+  const syncData = () => sync.mutate(undefined, { onSuccess: () => {
+    qc.invalidateQueries({ queryKey: getGetPulseProfileQueryKey() });
+    qc.invalidateQueries({ queryKey: getListPulseRepositoriesQueryKey() });
+    qc.invalidateQueries({ queryKey: getGetPulseAnalyticsQueryKey() });
+    qc.invalidateQueries({ queryKey: getGetPulseTrendingQueryKey() });
+    qc.invalidateQueries({ queryKey: getGetPulseLearningQueryKey() });
+  }});
+  return <div className="noise min-h-[100dvh] bg-background">
+    <aside className={`fixed inset-y-0 left-0 z-40 flex w-[242px] flex-col border-r border-sidebar-border bg-sidebar px-4 py-5 transition-transform duration-300 md:translate-x-0 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <div className="mb-9 flex items-center justify-between px-2"><Logo dark /><button className="text-sidebar-foreground/60 md:hidden" onClick={() => setMobileOpen(false)} data-testid="button-close-menu"><X className="size-5" /></button></div>
+      <div className="mb-6 rounded-xl border border-sidebar-border bg-sidebar-accent/55 p-3">
+        <div className="flex items-center gap-2.5"><Avatar src={profile?.avatarUrl} name={profile?.name} size="size-8" /><div className="min-w-0"><p className="truncate text-xs font-semibold text-sidebar-foreground" data-testid="text-sidebar-user">{profile?.name ?? 'Loading profile'}</p><p className="truncate font-mono text-[10px] text-sidebar-foreground/55">@{profile?.login ?? 'developer'}</p></div><StatusPill source={profile?.source} connected={profile?.connected} /></div>
+      </div>
+      <nav className="flex-1 space-y-7">
+        {navGroups.map(group => <div key={group.label}><p className="mb-2 px-2 font-mono text-[9px] uppercase tracking-[0.18em] text-sidebar-foreground/40">{group.label}</p><div className="space-y-0.5">{group.items.map(item => { const Icon = item.icon; const active = location === item.href; return <Link key={item.href} href={item.href} onClick={() => setMobileOpen(false)} className={`group flex items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm transition-colors ${active ? 'bg-sidebar-primary text-sidebar-primary-foreground' : 'text-sidebar-foreground/68 hover:bg-sidebar-accent hover:text-sidebar-foreground'}`} data-testid={`link-nav-${item.label.toLowerCase().replaceAll(' ', '-')}`}><Icon className={`size-4 ${active ? '' : 'opacity-70'}`} /><span>{item.label}</span>{active && <ChevronRight className="ml-auto size-3.5 opacity-60" />}</Link>; })}</div></div>)}
+      </nav>
+      <div className="space-y-1 border-t border-sidebar-border pt-4"><Button variant="quiet" onClick={syncData} disabled={sync.isPending} className="w-full justify-start bg-sidebar-accent/60 text-sidebar-foreground hover:bg-sidebar-accent" data-testid="button-sidebar-sync">{sync.isPending ? <LoaderCircle className="size-4 animate-spin" /> : <RefreshCw className="size-4" />} {sync.isPending ? 'Syncing signal…' : 'Sync GitHub data'}</Button><Link href="/settings" className="flex items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm text-sidebar-foreground/68 hover:bg-sidebar-accent hover:text-sidebar-foreground" data-testid="link-nav-settings"><Settings2 className="size-4 opacity-70" /> Settings</Link></div>
+    </aside>
+    {mobileOpen && <button className="fixed inset-0 z-30 bg-foreground/30 md:hidden" onClick={() => setMobileOpen(false)} aria-label="Close navigation" data-testid="button-overlay" />}
+    <main className="min-h-[100dvh] md:pl-[242px]"><header className="sticky top-0 z-20 flex h-[68px] items-center justify-between border-b border-border/80 bg-background/90 px-5 backdrop-blur-md sm:px-8"><div className="flex items-center gap-3"><button className="rounded-lg p-2 hover:bg-secondary md:hidden" onClick={() => setMobileOpen(true)} data-testid="button-open-menu"><Menu className="size-5" /></button><div className="hidden items-center gap-2 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground sm:flex"><Command className="size-3.5" /> command center <span className="text-border">/</span> {navGroups.flatMap(g => g.items).find(i => i.href === location)?.label ?? 'Settings'}</div></div><div className="flex items-center gap-3"><button className="relative rounded-lg p-2 text-muted-foreground hover:bg-secondary hover:text-foreground" aria-label="Notifications" data-testid="button-notifications"><Bell className="size-[17px]" /><span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-accent" /></button><Link href="/settings" className="flex items-center gap-2 rounded-lg p-1.5 pr-2 hover:bg-secondary" data-testid="link-header-profile"><Avatar src={profile?.avatarUrl} name={profile?.name} size="size-7" /><span className="hidden text-xs font-semibold sm:block">{profile?.login ?? 'developer'}</span></Link></div></header><div className="mx-auto max-w-[1440px] px-5 py-8 sm:px-8 lg:px-10">{children}</div></main>
+  </div>;
 }
 
-function App() {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
-          <Router />
-        </WouterRouter>
-        <Toaster />
-      </TooltipProvider>
-    </QueryClientProvider>
-  );
+function Landing() {
+  return <div className="min-h-[100dvh] overflow-hidden bg-background">
+    <header className="mx-auto flex max-w-7xl items-center justify-between px-5 py-6 sm:px-8"><Logo /><div className="flex items-center gap-3"><span className="hidden font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground sm:block">developer intelligence / 01</span><Link href="/login" className="rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground transition-transform hover:-translate-y-0.5" data-testid="link-landing-login">Connect GitHub <ArrowRight className="ml-1 inline size-4" /></Link></div></header>
+    <main>
+      <section className="relative mx-auto max-w-7xl px-5 pb-20 pt-16 sm:px-8 sm:pt-24 lg:pb-32"><div className="grid-paper pointer-events-none absolute right-0 top-10 -z-0 h-[460px] w-[53%] opacity-45 [mask-image:linear-gradient(to_bottom,black,transparent)]" /><div className="relative z-10 max-w-4xl"><div className="mb-7 flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.18em] text-primary"><span className="size-2 rounded-full bg-primary animate-pulse-line" /> a quieter way to keep up</div><h1 className="max-w-4xl text-[clamp(3.4rem,9vw,8.4rem)] font-extrabold leading-[.91] tracking-[-0.085em] text-foreground">The signal<br /><span className="text-primary">behind your code.</span></h1><p className="mt-8 max-w-xl text-base leading-7 text-muted-foreground sm:text-lg">TechPulse turns your GitHub work, the technology news worth your time, and your next learning move into one calm command center.</p><div className="mt-9 flex flex-wrap gap-3"><Link href="/login" className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-3.5 text-sm font-bold text-primary-foreground shadow-[0_14px_30px_-18px_hsl(var(--primary))] transition-transform hover:-translate-y-0.5" data-testid="link-hero-connect"><Github className="size-4" /> Connect your GitHub <ArrowRight className="size-4" /></Link><Link href="/dashboard" className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-5 py-3.5 text-sm font-bold transition-colors hover:border-primary/40 hover:bg-primary/5" data-testid="link-hero-demo">Explore the demo <ArrowUpRight className="size-4" /></Link></div></div><div className="relative mt-20 grid max-w-5xl grid-cols-2 border-y border-border/80 py-5 sm:grid-cols-4"><div><p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">workspace</p><p className="mt-1 text-sm font-bold">GitHub + world</p></div><div><p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">attention saved</p><p className="mt-1 text-sm font-bold">the high-signal cut</p></div><div className="mt-5 sm:mt-0"><p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">built for</p><p className="mt-1 text-sm font-bold">people who ship</p></div><div className="mt-5 sm:mt-0"><p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">status</p><p className="mt-1 flex items-center gap-1.5 text-sm font-bold"><span className="size-1.5 rounded-full bg-primary" /> ready when you are</p></div></div></section>
+      <section className="border-y border-border/80 bg-secondary/35"><div className="mx-auto grid max-w-7xl gap-10 px-5 py-16 sm:px-8 lg:grid-cols-[.8fr_1.2fr] lg:py-24"><div><p className="font-mono text-[10px] uppercase tracking-[0.18em] text-primary">one workspace, four lenses</p><h2 className="mt-4 max-w-md text-3xl font-bold leading-tight tracking-[-0.055em] sm:text-5xl">Less tab switching. More useful context.</h2></div><div className="grid gap-3 sm:grid-cols-2">{([['01', 'Work', 'See repository health, momentum, and the work that deserves your attention next.', GitBranch], ['02', 'World', 'Keep up with technology news without turning your morning into a scroll.', Globe2], ['03', 'Think', 'Ask AI to read the shape of a codebase and return a practical point of view.', BrainCircuit], ['04', 'Grow', 'A learning path built from what you are actually building, not a generic curriculum.', BookOpen]] as const).map(([number, title, text, Icon]) => <div key={String(number)} className="group rounded-xl border border-border/80 bg-card p-5 transition-all hover:-translate-y-1 hover:border-primary/35"><div className="flex items-start justify-between"><span className="font-mono text-[10px] text-primary">{number}</span><Icon className="size-5 text-muted-foreground transition-colors group-hover:text-primary" /></div><h3 className="mt-8 text-base font-bold">{title}</h3><p className="mt-2 text-sm leading-6 text-muted-foreground">{text}</p></div>)}</div></div></section>
+      <section className="mx-auto max-w-7xl px-5 py-20 sm:px-8 lg:py-28"><div className="rounded-2xl bg-sidebar px-6 py-12 text-sidebar-foreground sm:px-12"><div className="flex flex-col justify-between gap-10 md:flex-row md:items-end"><div><p className="font-mono text-[10px] uppercase tracking-[0.18em] text-sidebar-primary">your next useful thing</p><h2 className="mt-4 max-w-2xl text-4xl font-bold leading-tight tracking-[-0.06em] sm:text-6xl">Open the workspace.<br /><span className="text-sidebar-primary">Find the thread.</span></h2></div><Link href="/login" className="inline-flex w-fit items-center gap-2 rounded-lg bg-sidebar-primary px-5 py-3.5 text-sm font-bold text-sidebar-primary-foreground transition-transform hover:-translate-y-0.5" data-testid="link-footer-connect">Start with GitHub <ArrowRight className="size-4" /></Link></div></div></section>
+    </main><footer className="mx-auto flex max-w-7xl flex-col justify-between gap-4 border-t border-border px-5 py-7 text-xs text-muted-foreground sm:flex-row sm:px-8"><Logo /><span>Made for the curious, the careful, and the people who ship.</span></footer>
+  </div>;
 }
+
+function Login() {
+  const [, setLocation] = useLocation();
+  const profileQuery = useGetPulseProfile();
+  return <div className="grid min-h-[100dvh] lg:grid-cols-[1.05fr_.95fr]"><div className="relative hidden overflow-hidden bg-sidebar p-10 text-sidebar-foreground lg:flex lg:flex-col lg:justify-between"><div><Logo dark /><div className="mt-28 max-w-md"><p className="font-mono text-[10px] uppercase tracking-[0.18em] text-sidebar-primary">connect / focus / ship</p><h1 className="mt-5 text-6xl font-extrabold leading-[.95] tracking-[-0.08em]">Your work<br /><span className="text-sidebar-primary">has a pulse.</span></h1><p className="mt-7 max-w-sm text-sm leading-7 text-sidebar-foreground/65">A private-feeling command center for the code you care about and the ideas that move it forward.</p></div></div><div className="grid-paper absolute bottom-0 right-0 h-1/2 w-3/4 opacity-20 [mask-image:linear-gradient(to_top,black,transparent)]" /><p className="font-mono text-[10px] uppercase tracking-[0.16em] text-sidebar-foreground/40">TechPulse / developer intelligence</p></div><div className="flex items-center justify-center bg-background px-5 py-10 sm:px-10"><div className="w-full max-w-md"><div className="mb-12 lg:hidden"><Logo /></div><div className="mb-8"><p className="font-mono text-[10px] uppercase tracking-[0.16em] text-primary">welcome back</p><h2 className="mt-3 text-3xl font-bold tracking-[-0.05em]">Connect your workspace</h2><p className="mt-3 text-sm leading-6 text-muted-foreground">TechPulse uses your GitHub signal to make the workspace relevant from the first screen.</p></div><Card className="p-6 sm:p-7"><div className="mb-6 flex items-center gap-3 rounded-lg border border-primary/20 bg-primary/5 p-3.5"><ShieldCheck className="size-5 text-primary" /><div><p className="text-sm font-semibold">Your data stays yours</p><p className="mt-0.5 text-xs leading-5 text-muted-foreground">Read-only access to public GitHub activity.</p></div></div><Button className="w-full py-3.5" onClick={() => setLocation('/dashboard')} data-testid="button-connect-github"><Github className="size-4" /> Connect with GitHub <ArrowRight className="ml-auto size-4" /></Button><button className="mt-4 w-full text-center text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline" onClick={() => setLocation('/dashboard')} data-testid="button-use-demo">Continue with demo data</button></Card><div className="mt-8 flex items-center justify-between text-[11px] text-muted-foreground"><span className="flex items-center gap-1.5"><LockKeyhole className="size-3" /> No write access requested</span><span className="flex items-center gap-1.5"><Eye className="size-3" /> You can disconnect anytime</span></div>{profileQuery.isError && <p className="mt-8 text-center text-xs text-muted-foreground">Demo mode is ready if GitHub is unavailable.</p>}</div></div></div>;
+}
+
+function Dashboard() {
+  const profileQ = useGetPulseProfile();
+  const reposQ = useListPulseRepositories({ sort: 'updated' });
+  const analyticsQ = useGetPulseAnalytics();
+  const newsQ = useListPulseNews();
+  const learningQ = useGetPulseLearning();
+  if (profileQ.isLoading) return <PageLoading />;
+  if (profileQ.isError) return <QueryError onRetry={() => profileQ.refetch()} />;
+  const profile = profileQ.data;
+  const repos = reposQ.data ?? [];
+  const totals = analyticsQ.data?.totals;
+  const headline = learningQ.data?.headline ?? 'Make the next commit count.';
+  return <div className="animate-rise"><div className="mb-9 flex flex-wrap items-start justify-between gap-5"><div><div className="mb-3 flex items-center gap-3"><StatusPill source={profile?.source} connected={profile?.connected} /><span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">last pulse · moments ago</span></div><h1 className="text-3xl font-bold tracking-[-0.055em] sm:text-4xl">Good to see you, {profile?.name?.split(' ')[0] ?? 'developer'}.</h1><p className="mt-2 text-sm text-muted-foreground">Here is the useful shape of your developer world today.</p></div><Link href="/settings" className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2.5 text-sm font-semibold hover:border-primary/35" data-testid="link-dashboard-settings"><Settings2 className="size-4" /> Workspace settings</Link></div>
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{([['Repositories', totals?.repositories ?? repos.length, 'in your orbit', GitBranch, '/repositories'], ['Stars collected', totals?.stars ?? 0, 'across public work', Star, '/analytics'], ['Forks', totals?.forks ?? 0, 'community signal', GitBranch, '/analytics'], ['Commits', totals?.commits ?? 0, 'tracked recently', GitCommitHorizontal, '/analytics']] as const).map(([label, value, detail, Icon, href]) => <Link href={href} key={label} className="group"><Card className="p-5 transition-all group-hover:-translate-y-0.5 group-hover:border-primary/35"><div className="flex items-start justify-between"><span className="grid size-9 place-items-center rounded-lg bg-primary/10 text-primary"><Icon className="size-4" /></span><ArrowUpRight className="size-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" /></div><p className="mt-6 text-2xl font-bold tracking-[-0.045em]" data-testid={`metric-${label.toLowerCase().replaceAll(' ', '-')}`}>{analyticsQ.isLoading ? '—' : Number(value).toLocaleString()}</p><p className="mt-1 text-xs text-muted-foreground">{label} <span className="text-border">/</span> {detail}</p></Card></Link>)}</div>
+    <div className="mt-5 grid gap-5 lg:grid-cols-[1.35fr_.65fr]"><Card className="overflow-hidden"><div className="flex items-start justify-between border-b border-border p-5 sm:p-6"><div><p className="font-mono text-[10px] uppercase tracking-[0.16em] text-primary">attention map</p><h2 className="mt-2 text-lg font-bold tracking-[-0.03em]">Your repository orbit</h2></div><Link href="/repositories" className="text-xs font-semibold text-primary hover:underline" data-testid="link-dashboard-repositories">View all <ArrowRight className="ml-1 inline size-3.5" /></Link></div>{reposQ.isLoading ? <div className="space-y-3 p-5"><Skeleton className="h-16" /><Skeleton className="h-16" /><Skeleton className="h-16" /></div> : repos.length === 0 ? <EmptyState icon={GitBranch} title="No repositories in view" body="Connect GitHub or sync your workspace to surface your code." /> : <div className="divide-y divide-border">{repos.slice(0, 5).map(repo => <RepositoryRow key={repo.id} repo={repo} />)}</div>}</Card><Card className="p-5 sm:p-6"><div className="flex items-start justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent-foreground">next learning</p><h2 className="mt-2 text-lg font-bold tracking-[-0.03em]">A useful direction</h2></div><Lightbulb className="size-5 text-accent" /></div><p className="mt-8 text-xl font-bold leading-snug tracking-[-0.04em]" data-testid="text-learning-headline">{headline}</p><p className="mt-3 text-sm leading-6 text-muted-foreground">{learningQ.data?.summary ?? 'We are reading your repository signal to make a recommendation.'}</p><Link href="/learning" className="mt-8 inline-flex items-center gap-2 text-sm font-bold text-primary" data-testid="link-dashboard-learning">See your path <ArrowRight className="size-4" /></Link></Card></div>
+    <div className="mt-5 grid gap-5 lg:grid-cols-[.8fr_1.2fr]"><Card className="p-5 sm:p-6"><div className="flex items-center justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[0.16em] text-primary">language signal</p><h2 className="mt-2 text-lg font-bold">What you build with</h2></div><Link href="/analytics" className="text-muted-foreground hover:text-primary" data-testid="link-dashboard-analytics"><ArrowUpRight className="size-4" /></Link></div><LanguageBars data={analyticsQ.data?.languageDistribution ?? []} loading={analyticsQ.isLoading} /></Card><Card className="p-5 sm:p-6"><div className="flex items-center justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[0.16em] text-primary">fresh from the feed</p><h2 className="mt-2 text-lg font-bold">Technology worth your attention</h2></div><Link href="/news" className="text-xs font-semibold text-primary" data-testid="link-dashboard-news">Read all <ArrowRight className="ml-1 inline size-3.5" /></Link></div>{newsQ.isLoading ? <div className="mt-6 space-y-3"><Skeleton className="h-12" /><Skeleton className="h-12" /></div> : <div className="mt-5 space-y-4">{(newsQ.data ?? []).slice(0, 3).map(item => <NewsRow key={item.id} item={item} />)}</div>}</Card></div>
+  </div>;
+}
+
+function RepositoryRow({ repo }: { repo: PulseRepository }) {
+  return <Link href={`/repositories/${repo.id}`} className="group flex items-center gap-3 px-5 py-4 transition-colors hover:bg-primary/[.035] sm:px-6" data-testid={`link-repository-${repo.id}`}><span className="grid size-9 shrink-0 place-items-center rounded-lg bg-secondary font-mono text-xs font-bold text-secondary-foreground">{repo.name.slice(0, 2).toUpperCase()}</span><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><p className="truncate text-sm font-bold">{repo.name}</p>{repo.isPrivate && <LockKeyhole className="size-3 text-muted-foreground" />}</div><p className="mt-0.5 truncate text-xs text-muted-foreground">{repo.description || 'No description yet'}</p></div><div className="hidden items-center gap-5 text-xs text-muted-foreground sm:flex"><span className="flex items-center gap-1"><span className="size-2 rounded-full" style={{ backgroundColor: languageColor(repo.language) }} />{repo.language || 'Other'}</span><span className="flex items-center gap-1"><Star className="size-3.5" /> {repo.stars}</span></div><ChevronRight className="size-4 text-border transition-transform group-hover:translate-x-0.5 group-hover:text-primary" /></Link>;
+}
+
+function languageColor(language: string) { const colors: Record<string, string> = { TypeScript: '#2f74c0', JavaScript: '#d6a527', Python: '#4b8bbe', Rust: '#c7784d', Go: '#53b4c7', CSS: '#9b6dd5' }; return colors[language] ?? '#7b899c'; }
+
+function LanguageBars({ data, loading }: { data: { name: string; value: number; color: string }[]; loading?: boolean }) {
+  if (loading) return <div className="mt-7 space-y-4"><Skeleton className="h-4" /><Skeleton className="h-4" /><Skeleton className="h-4" /></div>;
+  if (!data.length) return <div className="mt-7"><EmptyState icon={Code2} title="No language signal yet" body="Your coding mix will appear after the first sync." /></div>;
+  const max = Math.max(...data.map(x => x.value), 1);
+  return <div className="mt-7 space-y-4">{data.slice(0, 5).map(lang => <div key={lang.name} data-testid={`metric-language-${lang.name}`}><div className="mb-1.5 flex justify-between text-xs"><span className="font-semibold">{lang.name}</span><span className="font-mono text-muted-foreground">{lang.value}%</span></div><div className="h-2 overflow-hidden rounded-full bg-secondary"><div className="h-full rounded-full transition-all duration-700" style={{ width: `${Math.max((lang.value / max) * 100, 5)}%`, backgroundColor: lang.color || languageColor(lang.name) }} /></div></div>)}</div>;
+}
+
+function NewsRow({ item }: { item: PulseNewsItem }) {
+  return <a href={item.url} target="_blank" rel="noreferrer" className="group flex gap-4" data-testid={`link-news-${item.id}`}><span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-accent" /><div className="min-w-0 flex-1"><p className="text-sm font-semibold leading-5 transition-colors group-hover:text-primary">{item.title}</p><p className="mt-1 text-xs text-muted-foreground">{item.source} <span className="mx-1 text-border">/</span> {item.readTime}</p></div><ExternalLink className="mt-1 size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" /></a>;
+}
+
+function Repositories() {
+  const [search, setSearch] = useState('');
+  const [sort, setSort] = useState<'updated' | 'stars' | 'forks' | 'name'>('updated');
+  const query = useListPulseRepositories({ search: search || undefined, sort });
+  const repos = query.data ?? [];
+  return <div className="animate-rise"><SectionHeading eyebrow="workspace / repositories" title="Your code, in focus." body="A searchable view of the repositories that shape your developer signal." action={<Link href="/analytics" className="inline-flex items-center gap-2 text-sm font-semibold text-primary" data-testid="link-repository-analytics">See analytics <ArrowUpRight className="size-4" /></Link>} /><Card className="mb-5 p-3 sm:p-4"><div className="flex flex-col gap-3 md:flex-row"><label className="relative flex-1"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search repositories…" className="h-11 w-full rounded-lg border border-border bg-background pl-10 pr-4 text-sm outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary/50 focus:ring-2 focus:ring-primary/10" data-testid="input-search-repositories" /></label><div className="flex items-center gap-2"><ListFilter className="ml-1 size-4 text-muted-foreground" /><select value={sort} onChange={e => setSort(e.target.value as typeof sort)} className="h-11 rounded-lg border border-border bg-background px-3 text-sm font-semibold outline-none focus:border-primary/50" data-testid="select-sort-repositories"><option value="updated">Recently updated</option><option value="stars">Most stars</option><option value="forks">Most forks</option><option value="name">Name</option></select></div></div></Card>{query.isError ? <QueryError onRetry={() => query.refetch()} /> : query.isLoading ? <Card className="space-y-3 p-5"><Skeleton className="h-20" /><Skeleton className="h-20" /><Skeleton className="h-20" /><Skeleton className="h-20" /></Card> : repos.length === 0 ? <EmptyState icon={Search} title="Nothing in this orbit" body={search ? 'Try a different repository name or clear your search.' : 'Connect GitHub and sync to bring your repositories into focus.'} /> : <Card><div className="divide-y divide-border">{repos.map(repo => <RepositoryRow key={repo.id} repo={repo} />)}</div></Card>}</div>;
+}
+
+function RepositoryDetail() {
+  const { id = '' } = useParams<{ id: string }>();
+  const query = useGetPulseRepository(id, { query: { enabled: !!id, queryKey: getGetPulseRepositoryQueryKey(id) } });
+  const analyze = useAnalyzePulseRepository();
+  const [analysis, setAnalysis] = useState<PulseAnalysis | null>(null);
+  const repo = query.data;
+  const runAnalysis = () => { if (repo) analyze.mutate({ data: { repository: repo } }, { onSuccess: result => setAnalysis(result) }); };
+  if (query.isLoading) return <PageLoading />;
+  if (query.isError || !repo) return <QueryError onRetry={() => query.refetch()} />;
+  const displayedAnalysis = analysis ?? repo.analysis;
+  return <div className="animate-rise"><Link href="/repositories" className="mb-7 inline-flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-primary" data-testid="link-back-repositories"><ChevronRight className="size-3 rotate-180" /> All repositories</Link><div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><div className="mb-3 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground"><span className="size-2 rounded-full" style={{ backgroundColor: languageColor(repo.language) }} /> {repo.language || 'Repository'} <span className="text-border">/</span> {repo.defaultBranch}</div><h1 className="text-3xl font-bold tracking-[-0.06em] sm:text-5xl">{repo.name}</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">{repo.description || 'No repository description provided.'}</p></div><div className="flex flex-wrap gap-2"><a href={repo.htmlUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2.5 text-sm font-semibold hover:border-primary/40" data-testid="link-github-repository"><Github className="size-4" /> GitHub <ExternalLink className="size-3.5" /></a><Button onClick={runAnalysis} disabled={analyze.isPending} variant="accent" data-testid="button-analyze-repository">{analyze.isPending ? <LoaderCircle className="size-4 animate-spin" /> : <Sparkles className="size-4" />}{analyze.isPending ? 'Reading code…' : displayedAnalysis ? 'Run fresh analysis' : 'Analyze with AI'}</Button></div></div>
+    <div className="grid gap-5 lg:grid-cols-[.76fr_1.24fr]"><div className="space-y-5"><Card className="p-5 sm:p-6"><div className="flex items-center justify-between"><h2 className="font-bold">Repository health</h2><span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wider ${repo.health === 'excellent' ? 'bg-primary/10 text-primary' : repo.health === 'watch' ? 'bg-accent/15 text-foreground' : 'bg-secondary text-muted-foreground'}`}>{repo.health}</span></div><div className="mt-6 grid grid-cols-2 gap-3">{([['Stars', repo.stars, Star], ['Forks', repo.forks, GitBranch], ['Watchers', repo.watchers, Eye], ['Open issues', repo.openIssues, CircleAlert]] as const).map(([label, value, Icon]) => <div key={label} className="rounded-lg bg-secondary/55 p-3"><Icon className="size-4 text-muted-foreground" /><p className="mt-3 text-lg font-bold">{value.toLocaleString()}</p><p className="text-[11px] text-muted-foreground">{label}</p></div>)}</div></Card><Card className="p-5 sm:p-6"><h2 className="font-bold">Languages</h2><LanguageBars data={repo.languages ?? []} /></Card><Card className="p-5 sm:p-6"><div className="flex items-center justify-between"><h2 className="font-bold">Recent commits</h2><GitCommitHorizontal className="size-4 text-muted-foreground" /></div><div className="mt-4 space-y-4">{(repo.commits ?? []).slice(0, 4).map(commit => <div key={commit.sha} className="flex gap-3"><span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary" /><div className="min-w-0"><p className="truncate text-xs font-semibold">{commit.message}</p><p className="mt-1 font-mono text-[10px] text-muted-foreground">{commit.author} · {formatDate(commit.committedAt)}</p></div></div>)}</div></Card></div><Card className="min-h-[420px] overflow-hidden"><div className="border-b border-border bg-secondary/35 p-5 sm:p-7"><div className="flex items-start justify-between gap-4"><div><p className="font-mono text-[10px] uppercase tracking-[0.16em] text-primary">ai repository readout</p><h2 className="mt-2 text-xl font-bold tracking-[-0.04em]">{displayedAnalysis ? 'A clear-eyed read of this codebase' : 'See the shape of this codebase'}</h2></div><span className="grid size-9 place-items-center rounded-lg bg-accent/15 text-accent-foreground"><BrainCircuit className="size-5" /></span></div></div>{analyze.isError ? <div className="p-7"><QueryError compact onRetry={runAnalysis} /></div> : displayedAnalysis ? <AnalysisContent analysis={displayedAnalysis} /> : <div className="flex min-h-[310px] flex-col items-center justify-center px-7 text-center"><span className="grid size-14 place-items-center rounded-2xl bg-primary/10 text-primary"><Sparkles className="size-6" /></span><h3 className="mt-5 text-lg font-bold">Turn repository context into momentum</h3><p className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">Get a practical summary of purpose, strengths, risk, and what to improve next.</p><Button onClick={runAnalysis} className="mt-6" variant="accent" data-testid="button-analyze-empty"><Sparkles className="size-4" /> Analyze repository</Button></div>}</Card></div></div>;
+}
+
+function AnalysisContent({ analysis }: { analysis: PulseAnalysis }) {
+  return <div className="space-y-7 p-5 sm:p-7"><div><p className="text-sm leading-7 text-foreground/80" data-testid="text-analysis-summary">{analysis.summary}</p><div className="mt-4 flex flex-wrap gap-2"><span className="rounded-full bg-secondary px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider">{analysis.complexity} complexity</span>{analysis.source && <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-primary">source · {analysis.source}</span>}</div></div><div className="grid gap-6 sm:grid-cols-2"><AnalysisList title="What is working" items={analysis.strengths} icon={Check} /><AnalysisList title="Worth improving" items={analysis.improvements} icon={ArrowUpRight} /></div><div><p className="mb-3 font-mono text-[10px] uppercase tracking-[0.16em] text-primary">suggested roadmap</p><div className="space-y-2">{analysis.roadmap.map((item, i) => <div key={item} className="flex gap-3 rounded-lg border border-border p-3"><span className="font-mono text-[10px] text-primary">0{i + 1}</span><p className="text-xs leading-5">{item}</p></div>)}</div></div></div>;
+}
+function AnalysisList({ title, items, icon: Icon }: { title: string; items: string[]; icon: typeof Check }) { return <div><p className="mb-3 font-mono text-[10px] uppercase tracking-[0.16em] text-primary">{title}</p><div className="space-y-2">{(items ?? []).slice(0, 4).map(item => <div key={item} className="flex gap-2 text-xs leading-5 text-muted-foreground"><Icon className="mt-0.5 size-3.5 shrink-0 text-primary" />{item}</div>)}</div></div>; }
+
+function Analytics() {
+  const q = useGetPulseAnalytics();
+  if (q.isLoading) return <PageLoading />;
+  if (q.isError || !q.data) return <QueryError onRetry={() => q.refetch()} />;
+  const data = q.data;
+  return <div className="animate-rise"><SectionHeading eyebrow="workspace / analytics" title="Your work, in motion." body="The patterns behind your repositories, activity, and community signal." action={<span className="flex items-center gap-2 rounded-full bg-primary/8 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-primary"><Activity className="size-3" /> live from pulse</span>} /><div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[['repositories', data.totals.repositories], ['stars', data.totals.stars], ['forks', data.totals.forks], ['commits', data.totals.commits]].map(([name, value]) => <Card key={String(name)} className="p-5"><p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">{String(name)}</p><p className="mt-4 text-3xl font-bold tracking-[-0.06em]" data-testid={`analytics-total-${name}`}>{Number(value).toLocaleString()}</p><div className="mt-3 h-1 overflow-hidden rounded-full bg-secondary"><div className="h-full w-2/3 rounded-full bg-primary" /></div></Card>)}</div><div className="mt-5 grid gap-5 lg:grid-cols-[1.1fr_.9fr]"><ChartCard title="Repository growth" eyebrow="cumulative repositories"><MiniBarChart points={data.repositoryGrowth} color="hsl(var(--primary))" /></ChartCard><ChartCard title="Language distribution" eyebrow="share of code"><LanguageBars data={data.languageDistribution} /></ChartCard></div><div className="mt-5 grid gap-5 lg:grid-cols-2"><ChartCard title="Stars and forks" eyebrow="community signal"><DualChart points={data.starsForks} /></ChartCard><ChartCard title="Commit activity" eyebrow="shipping rhythm"><DualChart points={data.activity} activity /></ChartCard></div></div>;
+}
+function ChartCard({ title, eyebrow, children }: { title: string; eyebrow: string; children: ReactNode }) { return <Card className="p-5 sm:p-6"><p className="font-mono text-[10px] uppercase tracking-[0.16em] text-primary">{eyebrow}</p><h2 className="mt-2 text-lg font-bold">{title}</h2>{children}</Card>; }
+function MiniBarChart({ points, color }: { points: { label: string; value: number }[]; color: string }) { const max = Math.max(...points.map(p => p.value), 1); return <div className="mt-8 flex h-48 items-end gap-2 border-b border-border pb-0">{points.map(point => <div key={point.label} className="group flex h-full flex-1 flex-col justify-end gap-2"><div className="relative min-h-1 rounded-t-md transition-all duration-500 group-hover:opacity-75" style={{ height: `${Math.max((point.value / max) * 88, 5)}%`, backgroundColor: color }}><span className="absolute -top-6 left-1/2 hidden -translate-x-1/2 rounded bg-sidebar px-1.5 py-1 font-mono text-[9px] text-sidebar-foreground group-hover:block">{point.value}</span></div><span className="truncate text-center font-mono text-[9px] text-muted-foreground">{point.label}</span></div>)}</div>; }
+function DualChart({ points, activity = false }: { points: { label: string; stars: number; forks: number }[]; activity?: boolean }) { const max = Math.max(...points.flatMap(p => [p.stars, p.forks]), 1); return <div className="mt-7"><div className="mb-3 flex justify-end gap-4 text-[10px] text-muted-foreground"><span className="flex items-center gap-1.5"><i className="size-2 rounded-full bg-primary" /> {activity ? 'commits' : 'stars'}</span><span className="flex items-center gap-1.5"><i className="size-2 rounded-full bg-accent" /> {activity ? 'reviews' : 'forks'}</span></div><div className="flex h-44 items-end gap-2 border-b border-border">{points.map(p => <div key={p.label} className="flex flex-1 items-end justify-center gap-1"><div className="w-2 rounded-t-sm bg-primary" style={{ height: `${Math.max((p.stars / max) * 88, 4)}%` }} /><div className="w-2 rounded-t-sm bg-accent" style={{ height: `${Math.max((p.forks / max) * 88, 4)}%` }} /><span className="absolute translate-y-24 font-mono text-[9px] text-muted-foreground">{p.label}</span></div>)}</div></div>; }
+
+function News() {
+  const [search, setSearch] = useState('');
+  const [category, setCategory] = useState('');
+  const q = useListPulseNews({ search: search || undefined, category: category || undefined });
+  const items = q.data ?? [];
+  const categories = [...new Set(items.map(item => item.category))];
+  return <div className="animate-rise"><SectionHeading eyebrow="signal / technology news" title="Stay curious, selectively." body="A focused feed for the ideas that will change how you build." /><Card className="mb-6 p-3 sm:p-4"><div className="flex flex-col gap-3 md:flex-row"><label className="relative flex-1"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search the signal…" className="h-11 w-full rounded-lg border border-border bg-background pl-10 pr-4 text-sm outline-none focus:border-primary/50" data-testid="input-search-news" /></label><div className="flex gap-2 overflow-auto">{['', ...categories].map(cat => <button key={cat || 'all'} onClick={() => setCategory(cat)} className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${category === cat ? 'bg-primary text-primary-foreground' : 'bg-secondary/70 text-muted-foreground hover:bg-secondary'}`} data-testid={`button-news-category-${cat || 'all'}`}>{cat || 'All signal'}</button>)}</div></div></Card>{q.isError ? <QueryError onRetry={() => q.refetch()} /> : q.isLoading ? <div className="grid gap-4 md:grid-cols-2"><Skeleton className="h-44" /><Skeleton className="h-44" /><Skeleton className="h-44" /></div> : items.length === 0 ? <EmptyState icon={Newspaper} title="No stories match" body="Try clearing your filters to widen the signal." /> : <div className="grid gap-4 md:grid-cols-2">{items.map((item, i) => <a href={item.url} target="_blank" rel="noreferrer" key={item.id} className={`group rounded-xl border border-card-border bg-card p-5 shadow-[var(--shadow-card)] transition-all hover:-translate-y-1 hover:border-primary/35 ${i === 0 ? 'md:col-span-2 md:p-7' : ''}`} data-testid={`card-news-${item.id}`}><div className="flex items-center justify-between gap-4"><span className="rounded-full bg-primary/10 px-2.5 py-1 font-mono text-[9px] font-medium uppercase tracking-[0.12em] text-primary">{item.category}</span><ExternalLink className="size-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" /></div><h2 className={`mt-5 font-bold leading-tight tracking-[-0.035em] ${i === 0 ? 'text-2xl sm:max-w-3xl' : 'text-lg'}`}>{item.title}</h2><p className="mt-3 text-sm leading-6 text-muted-foreground">{item.summary}</p><div className="mt-6 flex items-center gap-2 text-[11px] text-muted-foreground"><span className="font-semibold text-foreground">{item.source}</span><span className="text-border">/</span>{formatDate(item.publishedAt)}<span className="text-border">/</span>{item.readTime}</div></a>)}</div>}</div>;
+}
+
+function Trending() {
+  const q = useGetPulseTrending();
+  if (q.isLoading) return <PageLoading />;
+  if (q.isError || !q.data) return <QueryError onRetry={() => q.refetch()} />;
+  const data = q.data;
+  return <div className="animate-rise"><SectionHeading eyebrow="signal / what's moving" title="Follow the momentum." body="The technologies and repositories showing up in the wider developer conversation." /><div className="grid gap-5 lg:grid-cols-[.9fr_1.1fr]"><Card className="p-5 sm:p-6"><div className="flex items-center justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[0.16em] text-primary">technology radar</p><h2 className="mt-2 text-lg font-bold">Growing fast</h2></div><TrendingUp className="size-5 text-accent" /></div><div className="mt-7 space-y-5">{data.technologies.map((trend, i) => <div key={trend.name} className="group"><div className="mb-2 flex items-center justify-between"><div className="flex items-center gap-3"><span className="font-mono text-[10px] text-muted-foreground">0{i + 1}</span><span className="text-sm font-bold">{trend.name}</span></div><span className="font-mono text-xs font-medium text-primary">+{trend.growth}%</span></div><div className="h-1.5 overflow-hidden rounded-full bg-secondary"><div className="h-full rounded-full bg-primary transition-all duration-500 group-hover:bg-accent" style={{ width: `${Math.min(trend.growth, 100)}%` }} /></div><p className="mt-2 pl-7 text-xs text-muted-foreground">{trend.detail}</p></div>)}</div></Card><Card className="p-5 sm:p-6"><div className="flex items-center justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[0.16em] text-primary">community radar</p><h2 className="mt-2 text-lg font-bold">Repositories to watch</h2></div><GitBranch className="size-5 text-muted-foreground" /></div><div className="mt-5 divide-y divide-border">{data.repositories.map(repo => <RepositoryRow key={repo.id} repo={repo} />)}</div></Card></div><Card className="mt-5 p-5 sm:p-6"><div className="flex items-center justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[0.16em] text-primary">language pulse</p><h2 className="mt-2 text-lg font-bold">The stacks in motion</h2></div><Code2 className="size-5 text-muted-foreground" /></div><div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{data.languages.map(lang => <div key={lang.name} className="rounded-lg border border-border p-4 transition-colors hover:border-primary/35"><div className="flex items-center justify-between"><span className="flex items-center gap-2 text-sm font-bold"><span className="size-2.5 rounded-full" style={{ backgroundColor: languageColor(lang.name) }} />{lang.name}</span><span className="font-mono text-xs text-primary">+{lang.growth}%</span></div><p className="mt-3 text-xs leading-5 text-muted-foreground">{lang.detail}</p></div>)}</div></Card></div>;
+}
+
+function Learning() {
+  const q = useGetPulseLearning();
+  if (q.isLoading) return <PageLoading />;
+  if (q.isError || !q.data) return <QueryError onRetry={() => q.refetch()} />;
+  const data = q.data;
+  return <div className="animate-rise"><div className="relative overflow-hidden rounded-2xl bg-sidebar p-6 text-sidebar-foreground sm:p-9"><div className="grid-paper absolute inset-y-0 right-0 w-2/3 opacity-15 [mask-image:linear-gradient(to_right,transparent,black)]" /><div className="relative max-w-3xl"><p className="font-mono text-[10px] uppercase tracking-[0.18em] text-sidebar-primary">direction / based on your signal</p><h1 className="mt-4 text-3xl font-bold leading-tight tracking-[-0.06em] sm:text-5xl" data-testid="text-learning-page-headline">{data.headline}</h1><p className="mt-4 max-w-2xl text-sm leading-7 text-sidebar-foreground/68">{data.summary}</p></div></div><div className="mt-7 grid gap-5 lg:grid-cols-[1.2fr_.8fr]"><div><div className="mb-4 flex items-center justify-between"><h2 className="text-lg font-bold tracking-[-0.03em]">Recommended for your next chapter</h2><span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">{data.recommendations.length} paths</span></div><div className="space-y-3">{data.recommendations.map((rec, i) => <Card key={rec.title} className="group p-5 transition-all hover:border-primary/35"><div className="flex items-start gap-4"><span className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary/10 font-mono text-xs font-bold text-primary">0{i + 1}</span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-start justify-between gap-2"><h3 className="text-sm font-bold">{rec.title}</h3><span className="rounded-full bg-secondary px-2 py-1 text-[10px] font-semibold text-muted-foreground">{rec.difficulty} · {rec.duration}</span></div><p className="mt-2 text-xs leading-5 text-muted-foreground">{rec.description}</p><p className="mt-3 flex items-start gap-1.5 text-xs font-semibold text-primary"><Lightbulb className="mt-0.5 size-3.5 shrink-0" />{rec.reason}</p>{rec.progress > 0 && <div className="mt-4 flex items-center gap-3"><div className="h-1.5 flex-1 overflow-hidden rounded-full bg-secondary"><div className="h-full rounded-full bg-primary" style={{ width: `${rec.progress}%` }} /></div><span className="font-mono text-[10px] text-muted-foreground">{rec.progress}%</span></div>}</div><ChevronRight className="mt-1 size-4 text-border transition-transform group-hover:translate-x-0.5 group-hover:text-primary" /></div></Card>)}</div></div><Card className="h-fit p-5 sm:p-6"><div className="flex items-center justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[0.16em] text-primary">your roadmap</p><h2 className="mt-2 text-lg font-bold">From here to there</h2></div><Target className="size-5 text-accent" /></div><div className="mt-7 space-y-0">{data.roadmap.map((step, i) => <div key={step.step} className="relative flex gap-4 pb-7 last:pb-0"><div className="relative z-10 grid size-7 shrink-0 place-items-center rounded-full border border-primary/30 bg-card font-mono text-[10px] font-bold text-primary">{step.step}</div>{i < data.roadmap.length - 1 && <span className="absolute left-3.5 top-7 h-full w-px bg-border" />}<div><h3 className="text-sm font-bold">{step.title}</h3><p className="mt-1 text-xs leading-5 text-muted-foreground">{step.detail}</p></div></div>)}</div></Card></div></div>;
+}
+
+function AIWorkspace() {
+  const reposQ = useListPulseRepositories({ sort: 'updated' });
+  const [selected, setSelected] = useState('');
+  const [result, setResult] = useState<PulseAnalysis | null>(null);
+  const analyze = useAnalyzePulseRepository();
+  const repo = reposQ.data?.find(r => r.id === selected);
+  const submit = () => { if (repo) analyze.mutate({ data: { repository: repo } }, { onSuccess: setResult }); };
+  return <div className="animate-rise"><SectionHeading eyebrow="signal / intelligence layer" title="Ask better questions of your code." body="Choose a repository and get a focused, actionable readout. No dashboard theater." /><div className="grid gap-5 lg:grid-cols-[.7fr_1.3fr]"><Card className="h-fit p-5 sm:p-6"><div className="grid size-11 place-items-center rounded-xl bg-accent/15 text-accent-foreground"><BrainCircuit className="size-6" /></div><h2 className="mt-5 text-xl font-bold tracking-[-0.04em]">Repository intelligence</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">AI reads the repository context and returns what is strong, what is risky, and the next sensible move.</p><label className="mt-7 block"><span className="mb-2 block font-mono text-[10px] uppercase tracking-wider text-muted-foreground">repository</span><select value={selected} onChange={e => { setSelected(e.target.value); setResult(null); }} className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-primary/50" data-testid="select-ai-repository"><option value="">Select a repository…</option>{(reposQ.data ?? []).map(repo => <option key={repo.id} value={repo.id}>{repo.fullName}</option>)}</select></label><Button onClick={submit} disabled={!repo || analyze.isPending} className="mt-4 w-full" variant="accent" data-testid="button-run-ai-analysis">{analyze.isPending ? <LoaderCircle className="size-4 animate-spin" /> : <Sparkles className="size-4" />}{analyze.isPending ? 'Reading repository…' : 'Run analysis'}</Button>{analyze.isError && <p className="mt-3 text-xs text-destructive">The analysis could not be completed. Try again.</p>}<div className="mt-7 border-t border-border pt-5"><p className="flex items-center gap-2 text-xs font-semibold"><LockKeyhole className="size-3.5 text-primary" /> Read-only by design</p><p className="mt-2 text-xs leading-5 text-muted-foreground">TechPulse never writes to your repositories.</p></div></Card><Card className="min-h-[520px] overflow-hidden">{result ? <><div className="border-b border-border bg-secondary/35 p-5 sm:p-7"><p className="font-mono text-[10px] uppercase tracking-[0.16em] text-primary">analysis complete</p><h2 className="mt-2 text-xl font-bold">{repo?.name} / AI readout</h2></div><AnalysisContent analysis={result} /></> : <div className="grid min-h-[520px] place-items-center p-8 text-center"><div><div className="mx-auto grid size-16 place-items-center rounded-2xl border border-dashed border-primary/30 bg-primary/5 text-primary"><Sparkles className="size-7" /></div><h2 className="mt-5 text-xl font-bold">Your useful context starts here</h2><p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-muted-foreground">Select a repository to generate a concise, practical analysis in a few seconds.</p></div></div>}</Card></div></div>;
+}
+
+function Settings() {
+  const profileQ = useGetPulseProfile();
+  const sync = useSyncPulseData();
+  const [dark, setDark] = useState(() => localStorage.getItem('techpulse-theme') === 'dark');
+  useEffect(() => { document.documentElement.classList.toggle('dark', dark); localStorage.setItem('techpulse-theme', dark ? 'dark' : 'light'); }, [dark]);
+  const profile = profileQ.data;
+  return <div className="animate-rise max-w-4xl"><SectionHeading eyebrow="workspace / settings" title="Keep the signal yours." body="Connection, refresh behavior, and the way TechPulse feels when you open it." /><div className="space-y-5"><Card className="p-5 sm:p-7"><div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center"><div className="flex items-center gap-4"><Avatar src={profile?.avatarUrl} name={profile?.name} size="size-14" /><div><h2 className="font-bold" data-testid="text-settings-name">{profile?.name ?? 'Developer profile'}</h2><p className="mt-1 text-sm text-muted-foreground">@{profile?.login ?? 'developer'} <span className="mx-1 text-border">/</span> {profile?.source === 'github' ? 'GitHub' : 'Demo workspace'}</p></div></div><StatusPill source={profile?.source} connected={profile?.connected} /></div><div className="mt-7 flex flex-wrap gap-3"><Button onClick={() => sync.mutate()} disabled={sync.isPending} data-testid="button-settings-sync">{sync.isPending ? <LoaderCircle className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}{sync.isPending ? 'Syncing…' : 'Sync now'}</Button>{profile?.htmlUrl && <a href={profile.htmlUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-lg border border-border px-3.5 py-2.5 text-sm font-semibold hover:border-primary/40" data-testid="link-settings-github"><Github className="size-4" /> View GitHub profile <ExternalLink className="size-3.5" /></a>}</div>{sync.isSuccess && <p className="mt-4 flex items-center gap-2 text-xs text-primary"><Check className="size-3.5" /> {sync.data?.message ?? 'Workspace synced successfully.'}</p>}</Card><Card className="divide-y divide-border"><SettingRow icon={Sun} title="Appearance" detail="Choose the visual mode for your command center"><button onClick={() => setDark(false)} className={`rounded-md px-2.5 py-1.5 text-xs font-semibold ${!dark ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground'}`} data-testid="button-theme-light"><Sun className="mr-1 inline size-3.5" /> Light</button><button onClick={() => setDark(true)} className={`ml-1 rounded-md px-2.5 py-1.5 text-xs font-semibold ${dark ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground'}`} data-testid="button-theme-dark"><Moon className="mr-1 inline size-3.5" /> Dark</button></SettingRow><SettingRow icon={RefreshCw} title="Data freshness" detail="Keep your repository and analytics signal current"><span className="rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-primary">On demand</span></SettingRow><SettingRow icon={Database} title="Data controls" detail="TechPulse uses read-only GitHub data to build your workspace"><button className="text-xs font-semibold text-destructive hover:underline" onClick={() => alert('Demo workspace data is already local and can be disconnected from GitHub at any time.')} data-testid="button-disconnect-data">Disconnect data</button></SettingRow></Card><Card className="border-accent/30 bg-accent/5 p-5 sm:p-7"><div className="flex gap-4"><ShieldCheck className="mt-0.5 size-5 shrink-0 text-accent-foreground" /><div><h2 className="font-bold">A note on the demo workspace</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">If GitHub is not connected, TechPulse shows clearly labeled demo data so you can explore the product without pretending it is your own signal.</p></div></div></Card></div></div>;
+}
+function SettingRow({ icon: Icon, title, detail, children }: { icon: typeof Sun; title: string; detail: string; children: ReactNode }) { return <div className="flex flex-col justify-between gap-4 p-5 sm:flex-row sm:items-center sm:p-6"><div className="flex gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-lg bg-secondary text-muted-foreground"><Icon className="size-4" /></span><div><p className="text-sm font-bold">{title}</p><p className="mt-1 text-xs text-muted-foreground">{detail}</p></div></div><div className="sm:pl-12">{children}</div></div>; }
+
+function PageLoading() { return <div className="animate-rise"><div className="mb-9"><Skeleton className="h-3 w-36" /><Skeleton className="mt-4 h-10 w-2/3 max-w-lg" /><Skeleton className="mt-3 h-4 w-80 max-w-full" /></div><div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><Skeleton className="h-32" /><Skeleton className="h-32" /><Skeleton className="h-32" /><Skeleton className="h-32" /></div><div className="mt-5 grid gap-5 lg:grid-cols-2"><Skeleton className="h-80" /><Skeleton className="h-80" /></div></div>; }
+function formatDate(value?: string) { if (!value) return 'recently'; const date = new Date(value); if (Number.isNaN(date.getTime())) return value; return new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' }).format(date); }
+
+function Router() { const [location] = useLocation(); const publicPage = location === '/' || location === '/login'; return <ErrorBoundary resetKey={location}>{publicPage ? <Switch><Route path="/" component={Landing} /><Route path="/login" component={Login} /><Route component={NotFound} /></Switch> : <AppShell><Switch><Route path="/dashboard" component={Dashboard} /><Route path="/repositories" component={Repositories} /><Route path="/repositories/:id" component={RepositoryDetail} /><Route path="/analytics" component={Analytics} /><Route path="/ai-analysis" component={AIWorkspace} /><Route path="/news" component={News} /><Route path="/trending" component={Trending} /><Route path="/learning" component={Learning} /><Route path="/settings" component={Settings} /><Route component={NotFound} /></Switch></AppShell>}</ErrorBoundary>; }
+
+function App() { return <QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Router /></WouterRouter><Toaster /></TooltipProvider></QueryClientProvider>; }
 
 export default App;

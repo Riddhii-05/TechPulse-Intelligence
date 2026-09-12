@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: pulse
+    description: TechPulse intelligence operations
 paths:
   /healthz:
     get:
@@ -24,6 +26,162 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /pulse/profile:
+    get:
+      operationId: getPulseProfile
+      tags: [pulse]
+      summary: Get the connected developer profile
+      responses:
+        "200":
+          description: Developer profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PulseProfile"
+  /pulse/repositories:
+    get:
+      operationId: listPulseRepositories
+      tags: [pulse]
+      summary: List analyzed repositories
+      parameters:
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: language
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [stars, forks, name, updated]
+      responses:
+        "200":
+          description: Repositories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PulseRepository"
+  /pulse/repositories/{id}:
+    get:
+      operationId: getPulseRepository
+      tags: [pulse]
+      summary: Get a repository detail
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Repository detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PulseRepositoryDetail"
+        "404":
+          description: Repository not found
+  /pulse/analytics:
+    get:
+      operationId: getPulseAnalytics
+      tags: [pulse]
+      summary: Get developer analytics
+      responses:
+        "200":
+          description: Analytics summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PulseAnalytics"
+  /pulse/news:
+    get:
+      operationId: listPulseNews
+      tags: [pulse]
+      summary: Get technology news
+      parameters:
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: News feed
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PulseNewsItem"
+  /pulse/trending:
+    get:
+      operationId: getPulseTrending
+      tags: [pulse]
+      summary: Get trending developer technologies
+      responses:
+        "200":
+          description: Trending technologies and repositories
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PulseTrending"
+  /pulse/learning:
+    get:
+      operationId: getPulseLearning
+      tags: [pulse]
+      summary: Get personalized learning recommendations
+      responses:
+        "200":
+          description: Learning recommendations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PulseLearning"
+  /pulse/ai/analyze:
+    post:
+      operationId: analyzePulseRepository
+      tags: [pulse]
+      summary: Analyze a repository with Gemini
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PulseAnalysisInput"
+      responses:
+        "200":
+          description: Repository analysis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PulseAnalysis"
+        "503":
+          description: AI provider unavailable
+  /pulse/sync:
+    post:
+      operationId: syncPulseData
+      tags: [pulse]
+      summary: Refresh GitHub-connected data
+      responses:
+        "200":
+          description: Sync status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PulseSyncResult"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +191,220 @@ components:
           type: string
       required:
         - status
+    PulseProfile:
+      type: object
+      required: [login, name, avatarUrl, bio, publicRepos, followers, following, connected, source]
+      properties:
+        login: { type: string }
+        name: { type: string }
+        avatarUrl: { type: string }
+        bio: { type: string }
+        publicRepos: { type: integer }
+        followers: { type: integer }
+        following: { type: integer }
+        connected: { type: boolean }
+        source: { type: string, enum: [github, demo] }
+        htmlUrl: { type: string }
+    PulseRepository:
+      type: object
+      required: [id, name, fullName, description, htmlUrl, language, stars, forks, watchers, openIssues, isPrivate, defaultBranch, ownerLogin, updatedAt, createdAt, health]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        fullName: { type: string }
+        description: { type: string }
+        htmlUrl: { type: string }
+        language: { type: string }
+        stars: { type: integer }
+        forks: { type: integer }
+        watchers: { type: integer }
+        openIssues: { type: integer }
+        isPrivate: { type: boolean }
+        defaultBranch: { type: string }
+        ownerLogin: { type: string }
+        updatedAt: { type: string }
+        createdAt: { type: string }
+        health: { type: string, enum: [excellent, good, watch] }
+        topics:
+          type: array
+          items: { type: string }
+    PulseCommit:
+      type: object
+      required: [sha, message, author, committedAt]
+      properties:
+        sha: { type: string }
+        message: { type: string }
+        author: { type: string }
+        committedAt: { type: string }
+    PulseRepositoryDetail:
+      allOf:
+        - $ref: "#/components/schemas/PulseRepository"
+        - type: object
+          required: [languages, commits]
+          properties:
+            languages:
+              type: array
+              items:
+                $ref: "#/components/schemas/PulseLanguageStat"
+            commits:
+              type: array
+              items:
+                $ref: "#/components/schemas/PulseCommit"
+            analysis:
+              anyOf:
+                - $ref: "#/components/schemas/PulseAnalysis"
+                - type: "null"
+    PulseLanguageStat:
+      type: object
+      required: [name, value, color]
+      properties:
+        name: { type: string }
+        value: { type: number }
+        color: { type: string }
+    PulseAnalytics:
+      type: object
+      required: [languageDistribution, repositoryGrowth, starsForks, activity, totals]
+      properties:
+        languageDistribution:
+          type: array
+          items: { $ref: "#/components/schemas/PulseLanguageStat" }
+        repositoryGrowth:
+          type: array
+          items:
+            $ref: "#/components/schemas/PulseTimelinePoint"
+        starsForks:
+          type: array
+          items:
+            $ref: "#/components/schemas/PulseChartPoint"
+        activity:
+          type: array
+          items:
+            $ref: "#/components/schemas/PulseChartPoint"
+        totals:
+          type: object
+          required: [repositories, stars, forks, commits]
+          properties:
+            repositories: { type: integer }
+            stars: { type: integer }
+            forks: { type: integer }
+            commits: { type: integer }
+    PulseTimelinePoint:
+      type: object
+      required: [label, value]
+      properties:
+        label: { type: string }
+        value: { type: number }
+    PulseChartPoint:
+      type: object
+      required: [label, stars, forks]
+      properties:
+        label: { type: string }
+        stars: { type: number }
+        forks: { type: number }
+    PulseNewsItem:
+      type: object
+      required: [id, title, source, category, summary, url, publishedAt, readTime]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        source: { type: string }
+        category: { type: string }
+        summary: { type: string }
+        url: { type: string }
+        publishedAt: { type: string }
+        readTime: { type: string }
+    PulseTrending:
+      type: object
+      required: [technologies, repositories, languages]
+      properties:
+        technologies:
+          type: array
+          items:
+            $ref: "#/components/schemas/PulseTrend"
+        repositories:
+          type: array
+          items:
+            $ref: "#/components/schemas/PulseRepository"
+        languages:
+          type: array
+          items:
+            $ref: "#/components/schemas/PulseTrend"
+    PulseTrend:
+      type: object
+      required: [name, growth, detail]
+      properties:
+        name: { type: string }
+        growth: { type: number }
+        detail: { type: string }
+    PulseLearning:
+      type: object
+      required: [headline, summary, recommendations, roadmap]
+      properties:
+        headline: { type: string }
+        summary: { type: string }
+        recommendations:
+          type: array
+          items:
+            $ref: "#/components/schemas/PulseRecommendation"
+        roadmap:
+          type: array
+          items:
+            $ref: "#/components/schemas/PulseRoadmapStep"
+    PulseRecommendation:
+      type: object
+      required: [title, description, reason, difficulty, duration, progress]
+      properties:
+        title: { type: string }
+        description: { type: string }
+        reason: { type: string }
+        difficulty: { type: string }
+        duration: { type: string }
+        progress: { type: number }
+        resources:
+          type: array
+          items: { type: string }
+    PulseRoadmapStep:
+      type: object
+      required: [step, title, detail]
+      properties:
+        step: { type: integer }
+        title: { type: string }
+        detail: { type: string }
+    PulseAnalysisInput:
+      type: object
+      required: [repository]
+      properties:
+        repository:
+          $ref: "#/components/schemas/PulseRepository"
+    PulseAnalysis:
+      type: object
+      required: [summary, purpose, technologies, strengths, improvements, roadmap, complexity, security]
+      properties:
+        summary: { type: string }
+        purpose: { type: string }
+        technologies:
+          type: array
+          items: { type: string }
+        strengths:
+          type: array
+          items: { type: string }
+        improvements:
+          type: array
+          items: { type: string }
+        roadmap:
+          type: array
+          items: { type: string }
+        complexity: { type: string }
+        security:
+          type: array
+          items: { type: string }
+        generatedAt: { type: string }
+        source: { type: string }
+    PulseSyncResult:
+      type: object
+      required: [status, message, lastSyncedAt]
+      properties:
+        status: { type: string, enum: [synced, demo, unavailable] }
+        message: { type: string }
+        lastSyncedAt: { type: string }
 
