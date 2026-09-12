@@ -1,0 +1,377 @@
+Modify and improve my EXISTING TechPulse project. Do not create a new project from scratch and do not unnecessarily replace the current structure.
+
+First inspect the complete existing codebase, understand the current implementation, and identify what is already working and what is missing. Then modify the existing files directly.
+
+My main requirement is that all existing features should be properly connected and functional.
+
+==================================================
+MAIN REQUIREMENT
+==================================================
+
+Keep the existing UI and design wherever possible, but improve it wherever necessary.
+
+Do not delete working features.
+Do not create duplicate pages or duplicate API routes.
+Do not replace the project with a completely different architecture.
+Reuse existing components, routes, types, and styles wherever possible.
+
+==================================================
+FEATURES THAT MUST WORK
+==================================================
+
+1. GitHub OAuth login
+2. GitHub profile fetching
+3. GitHub repositories fetching
+4. GitHub repository synchronization
+5. PostgreSQL database connection through Prisma
+6. Dashboard with real GitHub data
+7. Repository search, filtering, and sorting
+8. Repository details page
+9. GitHub commits/activity
+10. Gemini AI repository analysis
+11. Personalized learning recommendations
+12. Technology news
+13. Trending repositories/technologies
+14. Analytics charts
+15. Settings page
+16. Logout
+17. Production deployment readiness
+
+==================================================
+FIRST: INSPECT THE EXISTING PROJECT
+==================================================
+
+Before changing anything:
+
+- Inspect package.json
+- Inspect the complete app directory
+- Inspect existing API routes
+- Inspect existing authentication code
+- Inspect existing GitHub integration
+- Inspect existing Gemini integration
+- Inspect database and Prisma files
+- Inspect environment variable usage
+- Inspect dashboard components
+- Inspect repository components
+- Inspect all existing pages
+- Check whether the project currently uses Next.js App Router
+- Check all TypeScript and runtime errors
+
+Create a short internal implementation plan, then directly modify the files.
+
+Do not ask me to manually recreate files that already exist.
+
+==================================================
+GITHUB OAUTH
+==================================================
+
+Fix the existing GitHub login implementation.
+
+The login must work independently of Gemini.
+
+Required flow:
+
+Login with GitHub
+→ GitHub authorization page
+→ OAuth callback
+→ Access token exchange
+→ Secure session/cookie
+→ GitHub profile fetch
+→ Repository synchronization
+→ Dashboard
+
+Use or fix these routes:
+
+/api/github/auth
+/api/github/callback
+/api/github/profile
+/api/github/repositories
+/api/github/commits
+/api/github/sync
+/api/auth/logout
+
+Use these environment variables:
+
+GITHUB_CLIENT_ID
+GITHUB_CLIENT_SECRET
+GITHUB_REDIRECT_URI
+NEXT_PUBLIC_APP_URL
+
+For local development:
+
+GITHUB_REDIRECT_URI=http://localhost:3000/api/github/callback
+
+Important:
+
+- Correct GitHub OAuth authorization URL
+- Correct token exchange endpoint
+- Correct redirect URI
+- OAuth state validation
+- Secure HTTP-only cookie/session
+- No token exposed to frontend
+- Proper logout
+- Proper unauthorized handling
+- Clear error messages
+- Handle denied authorization and invalid code
+- Handle GitHub API rate limits
+
+Do not use fake login or dummy GitHub profile data.
+
+==================================================
+DATABASE
+==================================================
+
+Connect the existing project to PostgreSQL using Prisma.
+
+If Prisma is already present, modify the existing schema instead of creating a duplicate setup.
+
+Store:
+
+- User profile
+- GitHub ID
+- Repository information
+- Stars
+- Forks
+- Languages
+- Repository dates
+- Recent synchronization data
+- AI analysis results
+- Learning recommendations
+
+Use proper relations, unique constraints, and upsert operations.
+
+When the user logs in or clicks “Refresh GitHub Data”:
+
+1. Fetch GitHub profile.
+2. Fetch repositories.
+3. Upsert the user.
+4. Upsert repositories.
+5. Avoid duplicates.
+6. Update changed data.
+7. Return the latest data to the dashboard.
+
+==================================================
+GEMINI AI
+==================================================
+
+Keep Gemini integration server-side.
+
+Use:
+
+GEMINI_API_KEY
+
+Gemini must be used for:
+
+- Repository analysis
+- Project summary
+- Technologies used
+- Strengths and weaknesses
+- Improvement suggestions
+- Security and scalability suggestions
+- Personalized learning recommendations
+- Developer insights
+- News summarization, if applicable
+
+Create or fix these routes if needed:
+
+/api/ai/analyze-repository
+/api/ai/generate-learning-plan
+/api/ai/developer-insight
+/api/ai/summarize-news
+
+Do not make Gemini mandatory for GitHub login or the basic dashboard.
+
+If the Gemini key is missing or the free quota is exceeded:
+
+- Show a clear message
+- Keep the rest of the application working
+- Do not crash the dashboard
+- Do not use fake AI results without clearly labeling them as demo/fallback data
+
+Save AI analysis and learning recommendations in the database where appropriate.
+
+==================================================
+DASHBOARD
+==================================================
+
+Modify the existing dashboard to use real data.
+
+Show:
+
+- Total repositories
+- Total stars
+- Total forks
+- Followers
+- Following
+- Most-used language
+- Recent activity
+- Recently updated repositories
+- Most-starred repositories
+- Recent commits
+- AI developer insight
+- Learning recommendation
+
+Use Recharts for:
+
+- Language distribution
+- Stars versus forks
+- Repository activity
+- Repository timeline
+- Commit activity where available
+
+Do not leave hardcoded dummy statistics if real GitHub data is available.
+
+==================================================
+REPOSITORIES
+==================================================
+
+Modify the existing repositories page.
+
+Add or fix:
+
+- Search
+- Language filter
+- Sort by stars
+- Sort by forks
+- Sort by name
+- Sort by last updated
+- Repository cards
+- Repository details
+- Open GitHub button
+- Analyze with Gemini button
+- Recent commits
+- Loading states
+- Error states
+- Empty states
+
+==================================================
+NEWS AND TRENDING
+==================================================
+
+Connect the existing news and trending pages to real APIs.
+
+Use:
+
+- Hacker News API
+- News API if NEWS_API_KEY exists
+- Reddit API if credentials exist
+- Stack Exchange API where useful
+- GitHub API for trending repositories/topics
+
+Optional API keys must not prevent the application from running.
+
+If an API is unavailable, show a graceful fallback message.
+
+==================================================
+SECURITY
+==================================================
+
+- Never expose API keys in client components.
+- Never expose GitHub access tokens.
+- Use HTTP-only cookies.
+- Use secure cookies in production.
+- Validate API inputs.
+- Protect private routes.
+- Add proper error handling.
+- Do not print secrets in logs.
+- Update .gitignore.
+- Create/update .env.example with variable names only.
+
+==================================================
+ENVIRONMENT VARIABLES
+==================================================
+
+Ensure the project supports:
+
+DATABASE_URL=
+
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
+GITHUB_REDIRECT_URI=http://localhost:3000/api/github/callback
+
+GEMINI_API_KEY=
+
+NEWS_API_KEY=
+
+REDDIT_CLIENT_ID=
+REDDIT_CLIENT_SECRET=
+REDDIT_USER_AGENT=TechPulse/1.0
+
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+Do not require optional keys for basic functionality.
+
+==================================================
+TESTING
+==================================================
+
+After modifying the existing project:
+
+1. Install missing dependencies.
+2. Run Prisma generation/migrations if required.
+3. Run the development server.
+4. Fix all TypeScript errors.
+5. Fix all build errors.
+6. Test GitHub login.
+7. Test OAuth callback.
+8. Test profile fetching.
+9. Test repository synchronization.
+10. Test dashboard data.
+11. Test repository search and filters.
+12. Test Gemini analysis.
+13. Test learning recommendations.
+14. Test news and trending pages.
+15. Test logout.
+16. Test missing API-key behavior.
+17. Test production build.
+
+Do not stop after explaining the changes. Actually modify the existing files and fix the errors.
+
+==================================================
+DEPLOYMENT
+==================================================
+
+Prepare the existing project for deployment.
+
+Preferred setup:
+
+- Next.js + API routes → Vercel
+- PostgreSQL → Supabase or Neon
+- GitHub → OAuth/API
+- Gemini → server-side API
+
+Make sure the production GitHub callback URL can be configured as:
+
+https://YOUR-VERCEL-DOMAIN.vercel.app/api/github/callback
+
+Update README.md with:
+
+- Installation commands
+- Required secrets
+- GitHub OAuth setup
+- Database setup
+- Prisma commands
+- Gemini setup
+- Local run instructions
+- Vercel deployment instructions
+- Production callback URL
+- Troubleshooting
+
+==================================================
+FINAL RESPONSE
+==================================================
+
+After completing the modifications, tell me:
+
+1. Which existing files were modified.
+2. Which new files were created.
+3. Which dependencies were installed.
+4. Which Replit Secrets I must add.
+5. How to configure GitHub OAuth.
+6. How to connect PostgreSQL.
+7. How to run the project.
+8. How to deploy it on Vercel.
+9. Which features are working.
+10. Any remaining issue that genuinely requires my action.
+
+Again: MODIFY MY EXISTING CODEBASE. Do not create a separate replacement project, do not remove working features, and do not give me only sample code.
