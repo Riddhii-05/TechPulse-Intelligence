@@ -1,0 +1,794 @@
+You are an expert full-stack developer. Build a complete, production-ready web application named **TechPulse – AI Developer & Tech Intelligence Platform**.
+
+Do not give me only an explanation or partial code. Actually create the complete working project inside Replit, including all folders, files, UI, backend APIs, database integration, authentication, AI features, error handling, and deployment configuration.
+
+The application must be functional, responsive, modern, and suitable for a final-year/college CSE project demonstration.
+
+---
+
+# 1. Project Overview
+
+TechPulse is an AI-powered developer intelligence platform where users can:
+
+1. Login using GitHub OAuth.
+2. Connect and analyze their GitHub account.
+3. View GitHub profile and repository statistics.
+4. Explore their repositories.
+5. View repository details, languages, stars, forks, and activity.
+6. Analyze their own projects using Gemini AI.
+7. Get personalized learning recommendations.
+8. Read summarized technology news.
+9. Explore trending repositories and technologies.
+10. View all important information through an interactive dashboard.
+
+The website should not look like a basic CRUD management system. It should look like a modern SaaS/developer analytics platform.
+
+---
+
+# 2. Required Technology Stack
+
+Use the following stack:
+
+## Frontend
+
+* Next.js with App Router
+* React
+* TypeScript
+* Tailwind CSS
+* shadcn/ui components
+* Framer Motion for animations
+* Recharts for graphs and analytics
+* Lucide React icons
+
+## Backend
+
+* Next.js API routes/server actions
+* Node.js
+* TypeScript
+
+## Database
+
+* PostgreSQL
+* Prisma ORM
+
+The application must work with a cloud PostgreSQL database such as Supabase, Neon, or any PostgreSQL connection string.
+
+## Authentication
+
+* GitHub OAuth
+* Secure HTTP-only cookies or secure server-side session handling
+* Do not expose GitHub access tokens to the frontend
+
+## AI
+
+* Google Gemini API
+* Use the current supported Gemini SDK
+* Keep the Gemini API key in environment variables
+* AI should be called only from the backend
+
+## External APIs
+
+Integrate these APIs wherever practical:
+
+1. GitHub REST API
+2. Hacker News API
+3. Reddit API, if credentials are available
+4. News API, if API key is available
+5. Stack Exchange API
+
+If an optional API key is unavailable, the application must still work using available APIs and graceful fallback data.
+
+---
+
+# 3. Design Requirements
+
+Create a modern dark-themed developer dashboard.
+
+## Design style
+
+* Dark navy/black background
+* Purple, blue, and cyan accent colors
+* Glassmorphism cards
+* Subtle gradients
+* Clean typography
+* Rounded cards
+* Smooth hover effects
+* Responsive layout
+* Professional SaaS-style interface
+* No excessive animations
+* No fake-looking stock content
+
+## Main layout
+
+After login, use:
+
+* Left sidebar
+* Top navigation bar
+* Main content area
+* Responsive mobile navigation
+
+Sidebar items:
+
+1. Dashboard
+2. My Repositories
+3. GitHub Analytics
+4. AI Project Analysis
+5. Tech News
+6. Trending Technologies
+7. Learning Recommendations
+8. Settings
+
+---
+
+# 4. Required Pages
+
+Create all these pages:
+
+```text
+/
+ /login
+ /dashboard
+ /repositories
+ /repositories/[id]
+ /analytics
+ /ai-analysis
+ /news
+ /trending
+ /learning
+ /settings
+```
+
+The root page should be a landing page with:
+
+* TechPulse logo/name
+* Short project description
+* Features section
+* GitHub login button
+* Modern hero section
+* CTA section
+* Footer
+
+---
+
+# 5. GitHub OAuth
+
+Implement complete GitHub OAuth.
+
+Flow:
+
+```text
+User clicks Login with GitHub
+        ↓
+Redirect to GitHub authorization
+        ↓
+User grants permission
+        ↓
+GitHub redirects to callback
+        ↓
+Backend exchanges code for access token
+        ↓
+Backend fetches GitHub profile
+        ↓
+Secure session/cookie is created
+        ↓
+User is redirected to dashboard
+```
+
+Create these routes or equivalent:
+
+```text
+/api/github/auth
+/api/github/callback
+/api/github/profile
+/api/github/repositories
+/api/github/commits
+/api/github/sync
+/api/auth/logout
+```
+
+Use environment variables:
+
+```env
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
+GITHUB_REDIRECT_URI=
+```
+
+Support both local and production callback URLs.
+
+Do not hardcode secrets.
+
+---
+
+# 6. GitHub Data Integration
+
+After login, fetch and display:
+
+## User profile
+
+* Username
+* Name
+* Profile picture
+* Bio
+* Public repositories
+* Followers
+* Following
+* GitHub profile link
+
+## Repository data
+
+* Repository name
+* Full repository name
+* Description
+* Primary language
+* Stars
+* Forks
+* Watchers
+* Open issues
+* Visibility
+* Repository URL
+* Last updated date
+* Created date
+* Default branch
+* Owner name
+
+## Coding activity
+
+Fetch available commit/activity information and display:
+
+* Recent commits
+* Commit count where possible
+* Activity trend
+* Most active repositories
+* Recent contribution information
+
+If GitHub API limits are reached, show a meaningful error message and use cached database data.
+
+---
+
+# 7. Database Design
+
+Use Prisma with PostgreSQL.
+
+Create a proper Prisma schema with at least these models:
+
+## User
+
+Fields should include:
+
+* id
+* githubId
+* username/login
+* name
+* email
+* avatarUrl
+* bio
+* publicRepos
+* followers
+* following
+* createdAt
+* updatedAt
+
+## Repository
+
+Fields should include:
+
+* id
+* githubRepoId
+* name
+* fullName
+* description
+* htmlUrl
+* language
+* stars
+* forks
+* watchers
+* openIssues
+* isPrivate
+* defaultBranch
+* ownerLogin
+* githubCreatedAt
+* githubUpdatedAt
+* createdAt
+* updatedAt
+* userId
+
+## AIAnalysis
+
+Fields should include:
+
+* id
+* repositoryId
+* summary
+* technologies
+* strengths
+* weaknesses
+* suggestions
+* complexity
+* improvementPlan
+* createdAt
+
+## LearningRecommendation
+
+Fields should include:
+
+* id
+* userId
+* title
+* description
+* reason
+* difficulty
+* resources
+* createdAt
+
+Use proper relations, indexes, unique constraints, and cascading behavior.
+
+Create:
+
+* Prisma client singleton
+* Database migration
+* Seed/demo support if required
+* Database error handling
+
+---
+
+# 8. Dashboard
+
+Create a fully functional dashboard.
+
+Display:
+
+## Top statistics cards
+
+* Total repositories
+* Total stars
+* Total forks
+* Followers
+* Most-used language
+* Recent activity
+
+## Charts
+
+Use Recharts for:
+
+1. Repository language distribution
+2. Stars and forks comparison
+3. Repository activity
+4. Repository creation/update timeline
+5. Commit activity if available
+
+## Dashboard sections
+
+* GitHub profile card
+* Recent repositories
+* Most starred repositories
+* Recently updated repositories
+* Trending technologies
+* AI-generated developer insight
+* Recommended next learning step
+
+The dashboard must use real data fetched from GitHub/database after login. Do not use only hardcoded dummy data.
+
+---
+
+# 9. Repositories Page
+
+Create a complete repositories page with:
+
+* Search repositories
+* Filter by language
+* Sort by stars, forks, name, and recently updated
+* Repository cards
+* Star count
+* Fork count
+* Language
+* Description
+* Visibility
+* Last updated date
+* Open GitHub button
+* View details button
+
+Repository details page should show:
+
+* Complete repository information
+* Statistics
+* Languages
+* Recent commits
+* GitHub link
+* AI analysis button
+* AI analysis result if already generated
+
+---
+
+# 10. Gemini AI Integration
+
+Integrate Google Gemini through a backend API.
+
+Use environment variable:
+
+```env
+GEMINI_API_KEY=
+```
+
+Create backend routes such as:
+
+```text
+/api/ai/analyze-repository
+/api/ai/summarize-news
+/api/ai/generate-learning-plan
+/api/ai/developer-insight
+```
+
+## Repository AI Analysis
+
+When the user clicks “Analyze with AI”, send repository information to Gemini.
+
+The AI should generate:
+
+* Project summary
+* Main purpose
+* Technologies used
+* Strengths
+* Weaknesses
+* Code/project improvement suggestions
+* Possible security concerns
+* Scalability suggestions
+* Complexity level
+* Recommended next features
+* Suggested learning topics
+
+Do not claim to analyze source code if only metadata is available. Clearly distinguish between metadata-based analysis and actual code analysis.
+
+If possible, fetch README content and relevant repository files from GitHub before analysis.
+
+Display the result in attractive sections:
+
+* Summary
+* Technologies
+* Strengths
+* Improvement areas
+* Recommended roadmap
+
+Save generated analysis in the database.
+
+Add loading states, error handling, and rate-limit protection.
+
+---
+
+# 11. Personalized Learning Recommendations
+
+Create an AI-powered learning page.
+
+Use the user's:
+
+* Repository languages
+* Technologies
+* GitHub activity
+* Project types
+* AI repository analysis
+* Frequently used tools
+
+Generate recommendations such as:
+
+* Technologies to learn next
+* Concepts to improve
+* Project ideas
+* Suggested roadmap
+* Difficulty level
+* Estimated learning order
+* Useful resources
+
+Example output:
+
+```text
+Recommended next skill:
+Backend API Development
+
+Reason:
+Your repositories mostly focus on frontend development,
+so learning backend APIs can improve your full-stack skills.
+
+Roadmap:
+1. HTTP and REST APIs
+2. Node.js
+3. Express/Next.js API routes
+4. PostgreSQL
+5. Authentication
+6. Deployment
+```
+
+Allow the user to regenerate recommendations.
+
+---
+
+# 12. Tech News Page
+
+Integrate technology news using:
+
+* Hacker News API
+* News API if available
+* Reddit API if available
+* Stack Exchange API where relevant
+
+Display:
+
+* Article title
+* Source
+* Date
+* Category
+* Short summary
+* External article link
+
+Use Gemini to summarize long articles when possible.
+
+Categories:
+
+* Artificial Intelligence
+* Web Development
+* Programming
+* Cybersecurity
+* Cloud Computing
+* Open Source
+* Databases
+* Developer Tools
+
+Add:
+
+* Search
+* Category filters
+* Refresh button
+* Loading skeletons
+* Empty state
+* API error fallback
+
+Do not scrape websites illegally or bypass restrictions.
+
+---
+
+# 13. Trending Technologies Page
+
+Create a trending section using available API data.
+
+Display:
+
+* Trending repositories
+* Popular languages
+* Rising technologies
+* Popular developer tools
+* Trending GitHub topics
+
+Use GitHub search API where possible.
+
+Show:
+
+* Repository name
+* Description
+* Language
+* Stars
+* Forks
+* GitHub link
+
+---
+
+# 14. Analytics Page
+
+Create a detailed GitHub analytics page with:
+
+* Language distribution chart
+* Repository statistics
+* Stars/forks chart
+* Most active repositories
+* Recent activity
+* Repository growth timeline
+* Public contribution information if available
+
+Use Recharts.
+
+Charts must be responsive and visually consistent with the dark theme.
+
+---
+
+# 15. Settings Page
+
+Create a settings page with:
+
+* GitHub account information
+* Connected account status
+* Refresh GitHub data button
+* Logout button
+* Theme preference
+* API/data status
+* Delete locally stored synced data option
+
+Do not allow users to view their raw GitHub access token.
+
+---
+
+# 16. API and Error Handling
+
+Implement:
+
+* Loading states
+* Error states
+* Empty states
+* API timeout handling
+* GitHub rate-limit handling
+* Gemini API error handling
+* Database error handling
+* Unauthorized user handling
+* Invalid request validation
+* Proper HTTP status codes
+
+Use clear error messages.
+
+Protect private routes. Unauthenticated users should be redirected to login.
+
+---
+
+# 17. Security Requirements
+
+* Never expose API keys in frontend code.
+* Never expose GitHub access tokens.
+* Use HTTP-only cookies for authentication.
+* Use secure cookies in production.
+* Validate all incoming API data.
+* Do not trust user-provided repository IDs without validation.
+* Avoid SQL injection by using Prisma.
+* Add basic rate limiting for Gemini endpoints.
+* Do not store unnecessary private GitHub data.
+* Add `.env` and secret files to `.gitignore`.
+
+---
+
+# 18. Environment Variables
+
+Create a `.env.example` file:
+
+```env
+DATABASE_URL=
+
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
+GITHUB_REDIRECT_URI=http://localhost:3000/api/github/callback
+
+GEMINI_API_KEY=
+
+NEWS_API_KEY=
+REDDIT_CLIENT_ID=
+REDDIT_CLIENT_SECRET=
+
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+FASTAPI_URL=
+```
+
+The application must not crash if optional API keys are missing.
+
+---
+
+# 19. Deployment Requirements
+
+Prepare the project for free-tier deployment.
+
+## Frontend/backend deployment
+
+Use Vercel-compatible Next.js configuration.
+
+## Database
+
+Use a cloud PostgreSQL database such as:
+
+* Supabase
+* Neon
+
+## AI backend
+
+Keep Gemini integration inside Next.js API routes unless a separate FastAPI service is genuinely required.
+
+If FastAPI is used, create:
+
+* `requirements.txt`
+* `main.py`
+* API endpoints
+* Deployment instructions for Render
+
+The project should be deployable without paid services for a college-level demo, within free-tier limits.
+
+Create a complete `README.md` containing:
+
+1. Project overview
+2. Features
+3. Tech stack
+4. Folder structure
+5. Installation commands
+6. Environment variables
+7. PostgreSQL setup
+8. Prisma migration commands
+9. GitHub OAuth setup
+10. Gemini API setup
+11. Local run instructions
+12. GitHub deployment steps
+13. Vercel deployment steps
+14. Production callback URL setup
+15. Troubleshooting
+
+---
+
+# 20. Required Commands
+
+The project should work with commands similar to:
+
+```bash
+npm install
+npx prisma generate
+npx prisma migrate dev
+npm run dev
+```
+
+Add proper scripts in `package.json`:
+
+```json
+{
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "start": "next start",
+    "lint": "next lint"
+  }
+}
+```
+
+Use the correct scripts according to the installed Next.js version.
+
+---
+
+# 21. Code Quality Requirements
+
+* Use a clean folder structure.
+* Use reusable components.
+* Avoid unnecessary duplicate code.
+* Use TypeScript types.
+* Use server-side API calls for secrets.
+* Add comments only where useful.
+* Do not leave unfinished TODOs.
+* Do not provide fake buttons that do nothing.
+* Every major button must perform a real action.
+* Do not use dummy data when real API data is available.
+* If an API is unavailable, show a proper fallback state.
+* Make all pages responsive.
+* Make the application compile without TypeScript errors.
+* Fix all build errors before finishing.
+
+---
+
+# 22. Final Deliverables
+
+You must create the complete working project, not just snippets.
+
+Before finishing:
+
+1. Create all required files.
+2. Install all required dependencies.
+3. Configure Prisma.
+4. Configure database schema.
+5. Implement GitHub OAuth.
+6. Implement GitHub API integration.
+7. Implement Gemini AI integration.
+8. Implement dashboard.
+9. Implement repositories page.
+10. Implement analytics.
+11. Implement news.
+12. Implement trending technologies.
+13. Implement learning recommendations.
+14. Implement settings and logout.
+15. Add loading and error states.
+16. Add `.env.example`.
+17. Add README.
+18. Run the project.
+19. Fix errors.
+20. Tell me exactly which environment variables I must add.
+21. Tell me exactly how to deploy it on Vercel and connect the cloud database.
+22. Do not stop after creating only the frontend.
+
+If any API credentials are unavailable, create the integration with environment-variable support and graceful fallback, but keep the rest of the application functional.
+
+Start by creating the complete project structure and implementing the application step by step. Continue until the complete working TechPulse application is ready.
